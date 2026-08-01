@@ -1,0 +1,24 @@
+{
+  "mt5": {
+    "terminal_path": "C:/Program Files/MetaTrader 5/terminal64.exe",
+    "timeout": 10,
+    "max_retries": 3,
+    "retry_delay": 5
+  },
+
+  "trading": {
+    "account_balance": 10000.0,
+    "risk_percentage": 1.0,
+    "consensus_threshold": 0.6
+  },
+
+  "validation": {
+    "max_price": 1000000,
+    "price_jump_threshold": 0.1
+  },
+
+  "cycle": {
+    "interval_seconds": 900,
+    "symbol_delay_seconds": 5
+  }
+}
