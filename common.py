@@ -46,5 +46,6 @@ class CandleWindowConfig:
             if value <= 0:
                 raise ValueError(f"{attr} অবশ্যই ০ থেকে বড় হতে হবে, পেয়েছেন {value}")
 
-# কনফিগারেশন ভ্যালিডেশন রান
-CandleWindowConfig.validate()
+# NOTE:
+# Removed the automatic call to CandleWindowConfig.validate() at import time.
+# Validation should be invoked explicitly at program startup (e.g. from main_bot.perform_startup_checks).
