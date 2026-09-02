@@ -1,0 +1,21 @@
+{
+  "account_number": "YOUR_ACCOUNT_NUMBER",
+  "password": "YOUR_PASSWORD",
+  "server": "ExnessMT5Demo1",
+  "trading": {
+    "account_balance": 10000.0,
+    "risk_percentage": 1.0,
+    "consensus_threshold": 0.6,
+    "symbols": ["XAUUSD"]
+  },
+  "cycle": {
+    "interval_seconds": 900,
+    "symbol_delay_seconds": 5
+  },
+  "validation": {
+    "max_price": 1000000,
+    "price_jump_threshold": 0.1,
+    "min_lot_size": 0.01,
+    "max_lot_size": 100.0
+  }
+}
