@@ -55,7 +55,8 @@ class AgentVote(Enum):
 
 @dataclass
 class AgentObservation:
-    """Single agent's observation for a specific timeframe."""
+    """Single agent's observation for a specific symbol and timeframe."""
+    symbol: str
     agent_name: str
     timeframe: str
     vote: str
@@ -92,6 +93,8 @@ class TradeExecution:
     status: str  # "OPEN", "CLOSED", "PARTIAL"
     consensus_votes: Dict[str, str]  # agent_name -> vote
     consensus_confidence: float
+    exit_price: Optional[float] = None
+    exit_time: Optional[str] = None
 
 
 @dataclass
@@ -127,11 +130,12 @@ class DashboardDataStore:
     def add_agent_observation(self, observation: AgentObservation):
         """Add an agent observation for a symbol."""
         with self.lock:
-            key = f"{observation.agent_name}_{observation.timeframe}"
+            # Key includes symbol so lookups by symbol become straightforward
+            key = f"{observation.symbol}_{observation.agent_name}_{observation.timeframe}"
             if key not in self.agent_observations:
                 self.agent_observations[key] = []
-            
-            # Keep only last 100 observations per agent/timeframe
+
+            # Keep only last 100 observations per symbol/agent/timeframe
             self.agent_observations[key].append(observation)
             if len(self.agent_observations[key]) > 100:
                 self.agent_observations[key].pop(0)
@@ -160,6 +164,10 @@ class DashboardDataStore:
             if symbol in self.open_positions:
                 trade = self.open_positions[symbol]
                 trade.status = "CLOSED"
+                trade.exit_price = exit_price
+                trade.exit_time = exit_time
+                # Move the trade to history (if not already present)
+                self.trade_history.append(trade)
                 del self.open_positions[symbol]
     
     def update_market_data(self, symbol: str, data: Dict[str, Any]):
@@ -186,32 +194,46 @@ class DashboardDataStore:
     def get_symbol_summary(self, symbol: str) -> Dict[str, Any]:
         """Get all data for a symbol (agents, consensus, market data, positions)."""
         with self.lock:
+            # collect matching agent observations (keys start with symbol_)
+            agent_obs = {
+                k: [asdict(obs) for obs in v]
+                for k, v in self.agent_observations.items()
+                if k.startswith(f"{symbol}_")
+            }
+
+            consensus_for_symbol = {
+                k: [asdict(vote) for vote in v]
+                for k, v in self.consensus_votes.items()
+                if k.startswith(f"{symbol}_")
+            }
+
             return {
                 "symbol": symbol,
                 "market_data": self.market_data.get(symbol, {}),
                 "open_position": asdict(self.open_positions[symbol]) if symbol in self.open_positions else None,
-                "agent_observations": {
-                    k: [asdict(obs) for obs in v]
-                    for k, v in self.agent_observations.items()
-                    if symbol in k
-                },
-                "consensus_votes": {
-                    k: [asdict(vote) for vote in v]
-                    for k, v in self.consensus_votes.items()
-                    if symbol in k
-                }
+                "agent_observations": agent_obs,
+                "consensus_votes": consensus_for_symbol
             }
     
     def get_dashboard_snapshot(self) -> Dict[str, Any]:
         """Get complete dashboard snapshot."""
         with self.lock:
+            def _safe_val(v):
+                try:
+                    json.dumps(v)
+                    return v
+                except Exception:
+                    return str(v)
+
+            safe_market_data = {k: {kk: _safe_val(vv) for kk, vv in v.items()} for k, v in self.market_data.items()}
+
             return {
                 "timestamp": datetime.utcnow().isoformat(),
                 "performance_metrics": asdict(self.performance_metrics) if self.performance_metrics else None,
                 "open_positions": {k: asdict(v) for k, v in self.open_positions.items()},
                 "recent_trades": [asdict(t) for t in self.trade_history[-10:]],
                 "news_feed": self.news_feed[-10:],
-                "market_data": self.market_data
+                "market_data": safe_market_data
             }
 
 
@@ -439,6 +461,21 @@ class RealtimeDashboard:
                 "open_positions": len(self.data_store.open_positions),
                 "total_trades": len(self.data_store.trade_history)
             })
+
+        # Shutdown endpoint for dev server graceful shutdown
+        def _shutdown():
+            try:
+                func = request.environ.get("werkzeug.server.shutdown")
+                if func is None:
+                    logger.warning("Werkzeug shutdown not available. Are you running under a production WSGI server?")
+                    return jsonify({"error": "shutdown not supported"}), 500
+                func()
+                return jsonify({"status": "shutting_down"}), 200
+            except Exception as e:
+                logger.error(f"Error during shutdown: {e}", exc_info=True)
+                return jsonify({"error": str(e)}), 500
+
+        self.app.add_url_rule('/shutdown', '_shutdown', _shutdown, methods=['POST'])
     
     def start(self):
         """Start the dashboard server in a background thread."""

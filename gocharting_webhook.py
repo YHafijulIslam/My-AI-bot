@@ -70,6 +70,17 @@ class GoChartingWebhookServer:
             self._handle_gocharting_alert,
             methods=["POST"]
         )
+
+        # Shutdown endpoint (dev server only)
+        def _shutdown():
+            func = request.environ.get("werkzeug.server.shutdown")
+            if func is None:
+                logger.warning("Werkzeug shutdown not available.")
+                return jsonify({"error": "shutdown not supported"}), 500
+            func()
+            return jsonify({"status": "shutting_down"}), 200
+
+        self.app.add_url_rule("/shutdown", "_shutdown", _shutdown, methods=["POST"])
         
         logger.info(f"🔧 GoCharting webhook initialized on {self.host}:{self.port}")
     
