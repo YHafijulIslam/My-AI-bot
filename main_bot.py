@@ -39,7 +39,11 @@ def setup_logging(log_dir: str = "logs", log_level: str = "INFO") -> logging.Log
     
     # রুট লগার কনফিগ করুন
     logger = logging.getLogger()
-    logger.setLevel(getattr(logging, log_level))
+    # normalize level (allow "info", "INFO", etc.) and provide a safe default
+    normalized_level = getattr(logging, log_level.upper(), None)
+    if not isinstance(normalized_level, int):
+        normalized_level = logging.INFO
+    logger.setLevel(normalized_level)
     
     # বিদ্যমান হ্যান্ডলার পরিষ্কার করুন
     for handler in logger.handlers[:]:
@@ -247,11 +251,12 @@ def main():
         # ===== ট্রেডিং সিম্বল =====
         if config and HAS_CONFIG_MANAGER:
             trading_config = ConfigManager.get_trading_config(config)
-            symbols_to_trade = trading_config.get("symbols", ["XAUUSD", "BTCUSD"])
+            # keep only Gold (XAUUSD) by default
+            symbols_to_trade = trading_config.get("symbols", ["XAUUSD"])
             cycle_interval = config.get("cycle", {}).get("interval_seconds", 900)
             symbol_delay = config.get("cycle", {}).get("symbol_delay_seconds", 5)
         else:
-            symbols_to_trade = ["XAUUSD", "BTCUSD"]
+            symbols_to_trade = ["XAUUSD"]
             cycle_interval = 900  # 15 মিনিট
             symbol_delay = 5
         
@@ -310,7 +315,7 @@ def main():
             logger.info(f"\n✅ চক্র #{cycle_count} সম্পন্ন - {len(symbols_to_trade)} সিম্বল প্রক্রিয়া করা হয়েছে")
             
             if cycle_errors > 0:
-                logger.warning(f"⚠️ এই চক্রে {cycle_errors} টি ত্রুটি ��টেছে")
+                logger.warning(f"⚠️ এই চক্রে {cycle_errors} টি ত্রুটি ঘটেছে")
             
             # চক্রের মধ্যে বিলম্ব (১৫ মিনিট)
             logger.info(f"\n⏳ পরবর্তী চক্রের জন্য {cycle_interval}s অপেক্ষা করছি ({cycle_interval/60:.0f} মিনিট)...")
